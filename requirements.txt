@@ -1,0 +1,7 @@
+requests>=2.31
+numpy>=1.26
+pandas>=2.0
+scikit-learn>=1.6
+matplotlib>=3.8
+shap>=0.46
+jupyterlab>=4.0

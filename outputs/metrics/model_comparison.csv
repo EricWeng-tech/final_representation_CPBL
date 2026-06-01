@@ -1,0 +1,5 @@
+Rank,Model,Feature_Set,Accuracy,AUC,F1,Brier_Score
+1,Random Forest,All 33,0.6927,0.7679,0.7277,0.2029
+2,TabPFN,All 33,0.6927,0.7494,0.7208,0.2059
+3,TabPFN,Diff 11,0.6872,0.7415,0.7186,0.2085
+4,Logistic Regression,Diff 11,0.5335,0.538,0.664,0.2472

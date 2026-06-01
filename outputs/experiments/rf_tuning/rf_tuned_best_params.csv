@@ -1,0 +1,5 @@
+﻿Hyperparameter,Baseline,Tuned
+n_estimators,300,1200
+max_depth,8,4
+min_samples_leaf,20,5
+max_features,default,log2

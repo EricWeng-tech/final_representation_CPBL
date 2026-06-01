@@ -1,0 +1,3 @@
+﻿Model,Feature_Set,Accuracy,AUC,F1,Brier_Score,Log_Loss
+RF Baseline,All 33,0.6927,0.7678,0.7277,0.2029,0.5942
+RF Tuned,All 33,0.7039,0.7647,0.7389,0.2084,0.607
