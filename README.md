@@ -13,7 +13,7 @@
 | TabPFN（33 features） | 69.27% | 0.7494 | 0.7208 |
 | Logistic Regression（11 diff features） | 53.35% | 0.5380 | 0.6640 |
 
-85% 是後續目標，目前尚未達成。已完成的快速調參讓 Random Forest Accuracy 增加 1.12 個百分點。
+已完成的快速調參讓 Random Forest Accuracy 增加 1.12 個百分點。
 
 ## 專案結構
 
@@ -85,6 +85,3 @@ git push -u origin feature/<your-topic>
 
 請勿提交 `.venv/`、`data/cache/`、`_archive/` 或逐場 prediction CSV。原始 CSV 與 `data/processed/model_ready_games.csv` 會保留在 Git，讓隊友不必重新爬資料即可重現分析。
 
-## 舊年份爬蟲
-
-2015-2017 年 CPBL 官網資料的抓取快照已放在本機 `_archive/legacy_cpbl_official_2015_2017/`。這批資料尚未合併到正式模型輸入；細節與官網 endpoint 記錄在 [`AGENTS.md`](AGENTS.md)。
