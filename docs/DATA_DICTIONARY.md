@@ -4,7 +4,7 @@
 
 **期末報告 — 資料分析與機器學習**
 
-利用中華職棒 2018–2026 年的比賽資料，建立勝負預測模型（Random Forest + Logistic Regression + SHAP 特徵分析）。
+利用中華職棒 2018–2025 年的比賽資料，建立勝負預測模型（Random Forest + Logistic Regression + SHAP 特徵分析）。
 
 > **目前實際流程：** 核心模型已拆分為 `01_random_forest.ipynb`、
 > `02_logistic_regression.ipynb`、`03_tabpfn.ipynb` 與
