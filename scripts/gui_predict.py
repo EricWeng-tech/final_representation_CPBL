@@ -7,9 +7,9 @@ User flow:
 3. Enter or auto-fill starter, bullpen, lineup, and recent team stats.
 4. Click Predict.
 
-The app trains a Random Forest on completed games before the requested date,
-then predicts from the user-entered matchup stats. Auto-fill is only a
-convenience for starting values; the editable fields are the prediction input.
+The app loads a pre-trained tuned Random Forest model, then reuses that model
+for each user-entered matchup. Auto-fill is only a convenience for starting
+values; the editable fields are the prediction input.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 import pandas as pd
+import joblib
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
@@ -30,6 +31,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = PROJECT_ROOT / "data" / "processed" / "model_ready_games.csv"
 LINEUPS_PATH = PROJECT_ROOT / "data" / "raw" / "lineups.csv"
 PITCHERS_PATH = PROJECT_ROOT / "data" / "raw" / "pitchers_box.csv"
+MODEL_DIR = PROJECT_ROOT / "outputs" / "models"
+MODEL_PATH = MODEL_DIR / "tuned_random_forest_gui.joblib"
 
 ID_COLS = {
     "game_id",
@@ -43,9 +46,10 @@ ID_COLS = {
 LABEL = "home_win"
 
 RF_PARAMS = {
-    "n_estimators": 300,
-    "max_depth": 8,
-    "min_samples_leaf": 20,
+    "n_estimators": 1200,
+    "max_depth": 4,
+    "min_samples_leaf": 5,
+    "max_features": "log2",
     "random_state": 42,
     "n_jobs": -1,
 }
@@ -140,16 +144,10 @@ def load_pitcher_data() -> pd.DataFrame:
     return df.sort_values(["date", "game_id", "side", "order"]).reset_index(drop=True)
 
 
-def train_random_forest(
-    df: pd.DataFrame, feature_cols: list[str], prediction_date: pd.Timestamp
-) -> tuple[Pipeline, int, str]:
-    train = df[df["date"] < prediction_date].copy()
+def train_random_forest(df: pd.DataFrame, feature_cols: list[str]) -> tuple[Pipeline, int, str]:
+    train = df.copy()
     if len(train) < 100:
-        raise ValueError(
-            f"Only {len(train)} prior games are available before {prediction_date.date()}; "
-            "choose a later date."
-        )
-
+        raise ValueError(f"Only {len(train)} games are available for model training.")
     model = Pipeline(
         [
             ("imputer", SimpleImputer(strategy="median")),
@@ -161,6 +159,50 @@ def train_random_forest(
     years = sorted(train["year"].dropna().unique(), key=int)
     year_text = f"{years[0]}-{years[-1]}" if years else "unknown years"
     return model, len(train), year_text
+
+
+def save_random_forest_model(
+    model: Pipeline, feature_cols: list[str], train_n: int, train_years: str
+) -> None:
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    joblib.dump(
+        {
+            "model": model,
+            "feature_cols": feature_cols,
+            "train_n": train_n,
+            "train_years": train_years,
+            "rf_params": RF_PARAMS,
+        },
+        MODEL_PATH,
+    )
+
+
+def load_saved_random_forest(feature_cols: list[str]) -> tuple[Pipeline, int, str, str]:
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"Missing saved model: {MODEL_PATH}. "
+            "Run python scripts/train_gui_model.py before launching the GUI."
+        )
+
+    if MODEL_PATH.stat().st_mtime < DATA_PATH.stat().st_mtime:
+        raise ValueError(
+            f"Saved model is older than {DATA_PATH}. "
+            "Run python scripts/train_gui_model.py to refresh it."
+        )
+
+    bundle = joblib.load(MODEL_PATH)
+    if bundle.get("feature_cols") != feature_cols:
+        raise ValueError(
+            "Saved model feature columns do not match current model_ready_games.csv. "
+            "Run python scripts/train_gui_model.py to rebuild it."
+        )
+
+    return (
+        bundle["model"],
+        int(bundle["train_n"]),
+        str(bundle["train_years"]),
+        f"loaded from {MODEL_PATH}",
+    )
 
 
 def side_for_row(row: pd.Series, team: str) -> str | None:
@@ -467,6 +509,9 @@ class MatchupPredictor(tk.Tk):
             self.df, self.feature_cols = load_data()
             self.lineups = load_lineup_data()
             self.pitchers = load_pitcher_data()
+            self.model, self.train_n, self.train_years, self.model_source = (
+                load_saved_random_forest(self.feature_cols)
+            )
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Startup error", str(exc))
             raise SystemExit(1) from exc
@@ -889,12 +934,9 @@ class MatchupPredictor(tk.Tk):
             if away_team == home_team:
                 raise ValueError("Away and home team must be different.")
 
-            model, train_n, train_years = train_random_forest(
-                self.df, self.feature_cols, prediction_date
-            )
             manual_values = self.collect_manual_values()
             x_pred = build_manual_prediction_row(self.feature_cols, manual_values)
-            prob_home = float(model.predict_proba(x_pred)[0, 1])
+            prob_home = float(self.model.predict_proba(x_pred)[0, 1])
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Prediction error", str(exc))
             return
@@ -911,9 +953,13 @@ class MatchupPredictor(tk.Tk):
 
         lines = [
             "MODEL",
-            "  Type: Random Forest",
-            f"  Training games: {train_n}",
-            f"  Training seasons: {train_years}",
+            "  Type: Tuned Random Forest",
+            "  Training mode: saved model is reused when current",
+            f"  Model source: {self.model_source}",
+            f"  Training games: {self.train_n}",
+            f"  Training seasons: {self.train_years}",
+            "  Parameters: n_estimators=1200, max_depth=4, "
+            "min_samples_leaf=5, max_features=log2",
             "",
             "INPUT",
             f"  Date: {prediction_date.date()}",
