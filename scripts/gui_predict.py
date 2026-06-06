@@ -20,6 +20,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+import numpy as np
 import pandas as pd
 import joblib
 from sklearn.ensemble import RandomForestClassifier
@@ -78,6 +79,42 @@ EXPLANATION_FEATURES = [
     ("bullpen_ERA_diff", "Bullpen ERA edge", "lower favors home"),
     ("bullpen_WHIP_diff", "Bullpen WHIP edge", "lower favors home"),
 ]
+
+FEATURE_LABELS_ZH = {
+    "home_win_rate_10": "主隊近10場勝率",
+    "away_win_rate_10": "客隊近10場勝率",
+    "home_runs_scored_10": "主隊近10場平均得分",
+    "away_runs_scored_10": "客隊近10場平均得分",
+    "home_runs_allowed_10": "主隊近10場平均失分",
+    "away_runs_allowed_10": "客隊近10場平均失分",
+    "home_starter_ERA": "主隊先發投手ERA",
+    "away_starter_ERA": "客隊先發投手ERA",
+    "home_starter_WHIP": "主隊先發投手WHIP",
+    "away_starter_WHIP": "客隊先發投手WHIP",
+    "home_starter_FIP": "主隊先發投手FIP",
+    "away_starter_FIP": "客隊先發投手FIP",
+    "home_bullpen_ERA": "主隊牛棚ERA",
+    "away_bullpen_ERA": "客隊牛棚ERA",
+    "home_bullpen_WHIP": "主隊牛棚WHIP",
+    "away_bullpen_WHIP": "客隊牛棚WHIP",
+    "home_lineup_OPS": "主隊打線OPS",
+    "away_lineup_OPS": "客隊打線OPS",
+    "home_lineup_OBP": "主隊打線OBP",
+    "away_lineup_OBP": "客隊打線OBP",
+    "home_lineup_SLG": "主隊打線SLG",
+    "away_lineup_SLG": "客隊打線SLG",
+    "win_rate_diff": "近10場勝率差距",
+    "runs_scored_diff": "近10場平均得分差距",
+    "run_diff_10": "近10場得失分差距",
+    "starter_ERA_diff": "先發投手ERA差距",
+    "starter_WHIP_diff": "先發投手WHIP差距",
+    "starter_FIP_diff": "先發投手FIP差距",
+    "lineup_OPS_diff": "打線OPS差距",
+    "lineup_OBP_diff": "打線OBP差距",
+    "lineup_SLG_diff": "打線SLG差距",
+    "bullpen_ERA_diff": "牛棚ERA差距",
+    "bullpen_WHIP_diff": "牛棚WHIP差距",
+}
 
 INPUT_FIELDS = [
     ("win_rate_10", "Win rate last 10", "0.000-1.000"),
@@ -470,10 +507,10 @@ def bullpen_average_from_players(
 
 def confidence_label(prob_home: float) -> str:
     if prob_home >= 0.65 or prob_home <= 0.35:
-        return "Strong"
+        return "高"
     if prob_home >= 0.58 or prob_home <= 0.42:
-        return "Medium"
-    return "Low"
+        return "中"
+    return "低"
 
 
 def edge_text(col: str, value: object) -> str:
@@ -496,6 +533,68 @@ def edge_text(col: str, value: object) -> str:
     home_edge = val < 0 if lower_favors_home else val > 0
     side = "home edge" if home_edge else "away edge"
     return f"{val:.3f}, {side}"
+
+
+def class_one_shap_values(raw_values: object) -> np.ndarray:
+    if isinstance(raw_values, list):
+        return np.asarray(raw_values[1][0], dtype=float)
+
+    values = np.asarray(raw_values, dtype=float)
+    if values.ndim == 3:
+        if values.shape[0] == 1:
+            return values[0, :, 1]
+        if values.shape[0] == 2:
+            return values[1, 0, :]
+        if values.shape[2] == 1:
+            return values[0, 1, :]
+    if values.ndim == 2:
+        return values[0]
+    return values
+
+
+def shap_explanation_lines(
+    model: Pipeline,
+    feature_cols: list[str],
+    x_pred: pd.DataFrame,
+    top_n: int = 5,
+) -> list[str]:
+    try:
+        import shap
+    except ImportError:
+        return [
+            "  無法計算 SHAP：目前環境沒有安裝 shap。",
+            "  請先執行 pip install shap，或確認 requirements.txt 已安裝完成。",
+        ]
+
+    imputer = model.named_steps["imputer"]
+    rf = model.named_steps["rf"]
+    x_imputed = imputer.transform(x_pred[feature_cols])
+    explainer = shap.TreeExplainer(rf)
+    shap_values = class_one_shap_values(explainer.shap_values(x_imputed))
+    feature_values = x_pred.iloc[0]
+
+    ranked = sorted(
+        zip(feature_cols, shap_values, strict=True),
+        key=lambda item: abs(float(item[1])),
+        reverse=True,
+    )
+
+    lines = [f"  前 {top_n} 項最關鍵因素："]
+    for rank, (feature, contribution) in enumerate(ranked[:top_n], start=1):
+        direction = "提高主隊勝率" if contribution > 0 else "降低主隊勝率"
+        side_text = "偏向主隊" if contribution > 0 else "偏向客隊"
+        value = feature_values.get(feature)
+        try:
+            value_text = "缺失" if pd.isna(value) else f"{float(value):.3f}"
+        except (TypeError, ValueError):
+            value_text = str(value)
+        label = FEATURE_LABELS_ZH.get(feature, feature)
+        lines.append(
+            f"  {rank}. {label}: 輸入值={value_text}, "
+            f"SHAP={contribution:+.4f}，{direction}（整體判斷{side_text}）"
+        )
+
+    return lines
 
 
 class MatchupPredictor(tk.Tk):
@@ -945,53 +1044,50 @@ class MatchupPredictor(tk.Tk):
         pick = home_team if prob_home >= 0.5 else away_team
         confidence = confidence_label(prob_home)
         self.result_var.set(
-            f"{away_team} at {home_team} on {prediction_date.date()}\n"
-            f"Random Forest pick: {pick} | Confidence: {confidence}\n"
-            f"Home win probability: {prob_home * 100:.1f}% | "
-            f"Away win probability: {prob_away * 100:.1f}%"
+            f"{prediction_date.date()}：{away_team} 作客 {home_team}\n"
+            f"Tuned Random Forest 預測：{pick} 勝率較高 | 信心程度：{confidence}\n"
+            f"主隊勝率：{prob_home * 100:.1f}% | 客隊勝率：{prob_away * 100:.1f}%"
         )
 
         lines = [
-            "MODEL",
-            "  Type: Tuned Random Forest",
-            "  Training mode: saved model is reused when current",
-            f"  Model source: {self.model_source}",
-            f"  Training games: {self.train_n}",
-            f"  Training seasons: {self.train_years}",
-            "  Parameters: n_estimators=1200, max_depth=4, "
+            "模型資訊",
+            "  類型：Tuned Random Forest",
+            "  使用方式：載入已保存模型，不在每次預測時重新訓練",
+            f"  模型來源：{self.model_source}",
+            f"  訓練場數：{self.train_n}",
+            f"  訓練季別：{self.train_years}",
+            "  參數：n_estimators=1200, max_depth=4, "
             "min_samples_leaf=5, max_features=log2",
             "",
-            "INPUT",
-            f"  Date: {prediction_date.date()}",
-            f"  Away: {away_team}",
-            f"  Home: {home_team}",
+            "輸入比賽",
+            f"  日期：{prediction_date.date()}",
+            f"  客隊：{away_team}",
+            f"  主隊：{home_team}",
             "",
-            "RESULT",
-            f"  Pick: {pick}",
-            f"  Home win probability: {prob_home * 100:.1f}%",
-            f"  Away win probability: {prob_away * 100:.1f}%",
-            f"  Confidence: {confidence}",
+            "預測結果",
+            f"  模型看好：{pick}",
+            f"  主隊勝率：{prob_home * 100:.1f}%",
+            f"  客隊勝率：{prob_away * 100:.1f}%",
+            f"  信心程度：{confidence}",
             "",
-            "FEATURE SOURCE",
-            "  User-entered manual stats from the form.",
-            f"  Auto-fill note: {self.source_var.get()}",
+            "資料來源",
+            "  預測使用 GUI 表單中的數值。",
+            f"  自動填入說明：{self.source_var.get()}",
             "",
-            "KEY EDGES",
+            "SHAP 單場解釋",
+            "  以下數值是針對目前這筆輸入計算的特徵貢獻。",
+            "  SHAP > 0 表示該特徵把預測推向主隊；SHAP < 0 表示推向客隊。",
         ]
 
-        row = x_pred.iloc[0]
-        for col, label, note in EXPLANATION_FEATURES:
-            if col in row.index:
-                lines.append(f"  {label}: {edge_text(col, row[col])} ({note})")
+        lines.extend(shap_explanation_lines(self.model, self.feature_cols, x_pred))
 
         lines.extend(
             [
                 "",
-                "IMPORTANT",
-                "  This is for unknown future matchups. The model prediction uses",
-                "  the editable stats in the form, not an exact historical game row.",
-                "  Auto-fill is only a starting point. Replace starter, bullpen,",
-                "  and lineup values with the real expected pre-game information.",
+                "重要提醒",
+                "  這是賽前未知對戰的機率預測，不是比賽結果保證。",
+                "  Auto-fill 只是初始值；若有更準確的先發、牛棚或打線情報，",
+                "  請以實際賽前資訊修正表單數值後再預測。",
             ]
         )
         self._set_detail("\n".join(lines))
