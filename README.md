@@ -6,12 +6,25 @@
 
 訓練集：2018–2024（1,947 場）｜測試集：2025（358 場）｜特徵數：33
 
-| 模型 | Accuracy | AUC | F1 |
-|------|---------:|----:|---:|
-| Random Forest baseline | 69.27% | 0.7678 | 0.7277 |
-| Random Forest tuned | 70.39% | 0.7647 | 0.7389 |
-| TabPFN | 69.27% | 0.7494 | 0.7208 |
-| Logistic Regression（11 diff features） | 53.35% | 0.5380 | 0.6640 |
+| 模型 | Accuracy | AUC | F1 | Brier |
+|------|---------:|----:|---:|------:|
+| Random Forest baseline | 69.27% | 0.7679 | 0.7277 | 0.2029 |
+| TabPFN（All 33） | 69.27% | 0.7494 | 0.7208 | 0.2059 |
+| TabPFN（Diff 11） | 68.72% | 0.7415 | 0.7186 | 0.2085 |
+| Logistic Regression（Diff 11） | 53.35% | 0.5380 | 0.6640 | 0.2472 |
+
+### 5-Fold Walk-Forward CV（RF，跨年泛化估計）
+
+| Fold | 驗證年 | 訓練場數 | Accuracy | AUC |
+|------|--------|---------|----------|-----|
+| 1 | 2021 | 713 | 57.59% | 0.6297 |
+| 2 | 2022 | 1,003 | 57.24% | 0.6081 |
+| 3 | 2023 | 1,293 | 60.47% | 0.6907 |
+| 4 | 2024 | 1,589 | 64.80% | 0.6814 |
+| 5 | 2025 | 1,947 | 69.27% | 0.7679 |
+| **平均** | | | **61.87% ±0.057** | **0.6756 ±0.059** |
+
+> 2025 年單年的 69.27% 有樂觀偏差；跨年平均 61.87% 為更穩健的泛化估計。
 
 ## 資料來源
 
@@ -23,23 +36,23 @@ rebas.tw 公開 JSON API，涵蓋 2018–2026 年一軍例行賽，共 29 個賽
 scripts/
   scrape_games.py               逐場比賽 box score（主爬蟲）
   scrape_all.py                 球員賽季累計統計
-  validate_data.py              資料品質驗證（PASS 58 / WARN 8 / FAIL 0）
+  validate_data.py              資料品質驗證（PASS 57 / WARN 8 / FAIL 0）
   build_model_ready.py          特徵工程 → 建模主表
 
 notebooks/
-  01_random_forest.ipynb
-  02_logistic_regression.ipynb
-  03_tabpfn.ipynb
-  04_model_comparison.ipynb
+  01_random_forest.ipynb        RF 訓練、SHAP、Walk-Forward CV
+  02_logistic_regression.ipynb  LR 訓練（VIF 篩選 diff features）
+  03_tabpfn.ipynb               TabPFN 訓練（需 GPU 環境）
+  04_model_comparison.ipynb     三模型彙整比較
   experiments/rf_tuning/        Random Forest 調參實驗
 
 data/raw/                       四份爬蟲 CSV
 data/processed/                 model_ready_games.csv（2,418 場 × 41 欄）
 data/cache/                     API JSON cache，不進 Git
 
-outputs/metrics/                模型指標與係數
-outputs/figures/                特徵重要性、SHAP 圖
-outputs/predictions/            逐場預測結果
+outputs/metrics/                模型指標（rf / lr / tabpfn / walk-forward / comparison）
+outputs/figures/                feature_importance_rf.png、shap_summary.png
+outputs/predictions/            逐場預測結果，不進 Git
 outputs/experiments/rf_tuning/  調參輸出
 
 docs/
@@ -59,7 +72,7 @@ python scripts\validate_data.py
 jupyter lab
 ```
 
-TabPFN 另行安裝（僅執行 `03_tabpfn.ipynb` 時需要）：
+TabPFN 需要獨立 GPU 環境，另行安裝：
 
 ```powershell
 python -m pip install -r requirements-tabpfn.txt
@@ -72,7 +85,7 @@ python -m pip install -r requirements-tabpfn.txt
 ```
 notebooks/01_random_forest.ipynb
 notebooks/02_logistic_regression.ipynb
-notebooks/03_tabpfn.ipynb
+notebooks/03_tabpfn.ipynb        ← 需 GPU 環境
 notebooks/04_model_comparison.ipynb
 ```
 
