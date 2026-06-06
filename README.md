@@ -26,6 +26,28 @@
 
 > 2025 年單年的 69.27% 有樂觀偏差；跨年平均 61.87% 為更穩健的泛化估計。
 
+### RF Fine-Tuning（RandomizedSearchCV，80 組）
+
+搜尋空間：n_estimators / max_depth / min_samples_leaf / max_features
+
+| 模型 | Accuracy | AUC | F1 | Brier |
+|------|---------:|----:|---:|------:|
+| RF Baseline | 69.27% | 0.7679 | 0.7277 | 0.2029 |
+| RF Tuned | **70.39%** | 0.7647 | **0.7389** | 0.2084 |
+
+最佳參數：`n_estimators=1200, max_depth=4, min_samples_leaf=5, max_features=log2`
+
+### Confidence Threshold 分析（RF）
+
+只預測模型信心度超過 threshold 的場次，準確率隨覆蓋率下降而上升。
+
+| Threshold | Pre-Tune 覆蓋率 | Pre-Tune 準確率 | Tuned 覆蓋率 | Tuned 準確率 |
+|-----------|---------------:|---------------:|-------------:|-------------:|
+| 0.50 | 100.0% | 69.27% | 100.0% | 70.39% |
+| 0.60 | 55.9% | 80.00% | 49.4% | 81.36% |
+| 0.65 | 38.6% | 81.88% | 26.8% | 81.25% |
+| 0.70 | 21.5% | 84.42% | 12.3% | 86.36% |
+
 ## 資料來源
 
 rebas.tw 公開 JSON API，涵蓋 2018–2026 年一軍例行賽，共 29 個賽季。
