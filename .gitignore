@@ -16,6 +16,9 @@ _archive/
 outputs/predictions/
 outputs/experiments/**/*predictions*.csv
 
+# API keys — never commit
+.env
+
 # Operating system files
 .DS_Store
 Thumbs.db
