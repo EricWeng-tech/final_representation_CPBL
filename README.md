@@ -95,7 +95,7 @@ docs/
 ### 啟動
 
 ```powershell
-cd "C:\Users\Eric\Desktop\python資料分析與機器學習\期末報告"
+# 切換到專案根目錄後執行
 .\.venv\Scripts\streamlit.exe run scripts\streamlit_app.py
 ```
 
