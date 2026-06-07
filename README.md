@@ -90,6 +90,42 @@ docs/
   model_assumptions.md          模型假設與前處理說明
 ```
 
+## Streamlit 賽前預測介面
+
+### 啟動
+
+```powershell
+cd "C:\Users\Eric\Desktop\python資料分析與機器學習\期末報告"
+.\.venv\Scripts\streamlit.exe run scripts\streamlit_app.py
+```
+
+瀏覽器開啟 `http://localhost:8501`，關閉按 `Ctrl+C`。
+
+### 操作流程
+
+1. 選擇**比賽日期**、**客隊**、**主隊**
+2. 按 **Auto-fill**：自動填入雙方近 10 場滾動數據，並選出 ERA 最低先發投手
+3. 展開「牛棚投手」或「打線」可手動指定球員（選填）
+4. 確認中間**指標對比表**顯示正確
+5. 按 **⚾ 預測勝負**，顯示：
+   - 主客隊勝率與信心等級
+   - SHAP 特徵貢獻長條圖（紅＝有利主隊、藍＝有利客隊）
+   - Gemini AI 白話分析（需設定 API key）
+
+### 串接 Gemini API
+
+在專案根目錄建立 `.env`（**不可推上 GitHub**）：
+
+```
+GEMINI_API_KEY=your_key_here
+```
+
+API key 取得方式：前往 [Google AI Studio](https://aistudio.google.com/app/apikey) 建立 Free tier key。
+
+> 若未設定 API key 或配額不足，介面自動切換為本地 SHAP 文字分析，不影響預測功能。
+
+---
+
 ## 快速開始
 
 建議使用 Python 3.12，Windows PowerShell：
@@ -131,6 +167,6 @@ python scripts\build_model_ready.py
 
 ## 未來展望
 
-- **雲端 MLOps**：升級為網頁版，實現每日資料自動爬取與預測
-- **個人化陣容模擬**：串接球員資料庫，支援下拉選單自由勾選當日九人打線
-- **擴充高階數據**：納入擊球初速、球場效應（Park Factors）與比賽當天天氣
+- **雲端 MLOps**：每日自動爬取最新賽況，推送至 Streamlit Cloud 或 HuggingFace Spaces
+- **擴充高階數據**：納入擊球初速、球場效應（Park Factor）與比賽當天天氣
+- **即時更新模型**：每賽季結束後重新 fine-tune，維持預測準確率
